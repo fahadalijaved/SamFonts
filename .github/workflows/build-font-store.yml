@@ -1,0 +1,79 @@
+name: Build Font Store
+
+# Push a .ttf/.otf into fonts/<section>/ (any depth), commit, push - that's
+# the entire "add a font" workflow. This rebuilds ONE zip + manifest PER
+# section (not one big zip for everything) plus catalog.json (a small index
+# of every section, no font data), and republishes all of it to the same
+# rolling release tag every time, so FontLibrary.ALL.manifestUrl (really: its
+# catalogUrl now — see FontStoreRepository.kt) never has to change.
+#
+# workflow_dispatch lets you re-run this by hand from the Actions tab without
+# needing an empty commit, e.g. after editing this workflow itself.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "fonts/**"
+  workflow_dispatch: {}
+
+# The rolling release tag the app's catalogUrl points at. Change this in
+# exactly one other place if you ever do change it: FontLibrary.ALL in
+# FontStoreRepository.kt.
+env:
+  RELEASE_TAG: fontstore-v1
+
+permissions:
+  contents: write # needed to create/update the release
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build catalog.json + one zip/manifest per category
+        run: |
+          set -euo pipefail
+          python3 scripts/build_font_store_manifest.py fonts dist
+
+      - name: Fill in each category's zipUrl / manifestUrl
+        # GitHub release-asset download URLs are deterministic given
+        # owner/repo/tag/filename, so this doesn't need to wait until after
+        # the release exists - it's the same URL either way.
+        run: |
+          set -euo pipefail
+          python3 - "${{ github.repository }}" "${{ env.RELEASE_TAG }}" << 'PY'
+          import json, sys
+          repo, tag = sys.argv[1], sys.argv[2]
+          base = f"https://github.com/{repo}/releases/download/{tag}"
+
+          with open("dist/catalog.json") as f:
+              catalog = json.load(f)
+          for cat in catalog["categories"]:
+              cat["manifestUrl"] = f"{base}/{cat['id']}.manifest.json"
+          with open("dist/catalog.json", "w", encoding="utf-8") as f:
+              json.dump(catalog, f, ensure_ascii=False, indent=2)
+
+          for cat in catalog["categories"]:
+              manifest_path = f"dist/{cat['id']}.manifest.json"
+              with open(manifest_path) as f:
+                  manifest = json.load(f)
+              manifest["zipUrl"] = f"{base}/{cat['id']}.zip"
+              with open(manifest_path, "w", encoding="utf-8") as f:
+                  json.dump(manifest, f, ensure_ascii=False, indent=2)
+          PY
+
+      - name: Publish rolling release
+        run: |
+          set -euo pipefail
+          # "Rolling" = delete-and-recreate on the same tag, rather than a
+          # new tag per push. `gh release delete` on a tag that doesn't exist
+          # yet (first-ever run) would fail the whole job without
+          # --cleanup-tag ... || true here.
+          gh release delete "${{ env.RELEASE_TAG }}" --yes --cleanup-tag || true
+          gh release create "${{ env.RELEASE_TAG }}" \
+            dist/catalog.json dist/*.zip dist/*.manifest.json \
+            --title "Font Store" \
+            --notes "Auto-published by build-font-store.yml from the fonts/ folder. Do not edit these assets by hand - push a font file and let this workflow rebuild them instead."
+        env:
+          GH_TOKEN: ${{ github.token }}
