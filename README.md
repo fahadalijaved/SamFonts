@@ -62,9 +62,10 @@ SamFonts completely bypasses the need for pre-built asset packages by compiling 
 
 ## 🛠️ Built With
 
-* **UI Framework:** Jetpack Compose (Material 3 tailored to OneUI 8.5 tokens)
+* **UI Framework:** Native OneUI/SESL Views ([tribalfs](https://github.com/tribalfs)'s SESL AndroidX/Material forks + OneUI Design library), with Jetpack Compose used for a few dialogs and the search overlay
 * **Security & Cryptography:** BouncyCastle + `apksig`
 * **Inter-process Communication:** Shizuku API
+* **Embedded Runtime:** Chaquopy (Python)
 * **Asynchronous Execution:** Kotlin Coroutines & Flow
 
 ---
@@ -72,6 +73,7 @@ SamFonts completely bypasses the need for pre-built asset packages by compiling 
 ## 👥 Credits & Acknowledgments
 
 SamFonts wouldn't be possible without the foundational work, research, and contributions of:
+* **[tribalfs](https://github.com/tribalfs)** — SESL (Samsung Experience Support Library) AndroidX and Material forks, and the OneUI Design library, that the native UI is built on
 * **Gabriel2392**
 * **VikramAditya**
 * **Wr3ckless1**
